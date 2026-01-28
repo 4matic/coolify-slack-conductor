@@ -25,30 +25,8 @@ func (DebugTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func reverseproxy() *httputil.ReverseProxy {
 	rewrite := func(req *httputil.ProxyRequest) {
-		// Read body
-		body, _ := io.ReadAll(req.In.Body)
-		log.Println(string(body))
-
 		req.SetXForwarded() // set headers on Out request
 
-		dests := destinations(string(body))
-
-		// Reset body back to original
-		req.In.Body = io.NopCloser(bytes.NewBuffer(body))
-		req.Out.Body = io.NopCloser(bytes.NewBuffer(body))
-
-		// Send to relevant destinations
-		for _, dest := range dests {
-			log.Println("Mirroring to", dest.url)
-
-			// Cloned request for the mirror
-			mReq := req.Out.Clone(req.Out.Context())
-			mReq.Body = io.NopCloser(bytes.NewReader(body))
-
-			mirrorRequest(*mReq, dest.url)
-		}
-
-		// Always send to main destination
 		destUrl, _ := url.Parse(MainDestination.url)
 		log.Println("Sending to main:", destUrl.String())
 		setRequestPath(req.Out, destUrl)
@@ -58,6 +36,49 @@ func reverseproxy() *httputil.ReverseProxy {
 	proxy.Transport = DebugTransport{}
 
 	return proxy
+}
+
+// handleNotification processes the notification and returns whether to send to main
+func handleNotification(req *http.Request) bool {
+	// Read body
+	body, _ := io.ReadAll(req.Body)
+	log.Println(string(body))
+
+	// Reset body for potential proxy use
+	req.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	dests := destinations(string(body))
+
+	// If no destinations matched, send to main only
+	if len(dests) == 0 {
+		log.Println("No matching destinations, sending to main only")
+		return true
+	}
+
+	// Check if any destination wants to also send to main
+	shouldSendToMain := false
+	for _, dest := range dests {
+		if dest.sendToMain {
+			shouldSendToMain = true
+			break
+		}
+	}
+
+	// Mirror to all matching destinations
+	for _, dest := range dests {
+		log.Println("Mirroring to", dest.url)
+
+		// Clone request for the mirror
+		mReq := req.Clone(req.Context())
+		mReq.Body = io.NopCloser(bytes.NewReader(body))
+
+		mirrorRequest(*mReq, dest.url)
+	}
+
+	// Reset body again for potential proxy use
+	req.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	return shouldSendToMain
 }
 
 var authKey string
@@ -100,8 +121,17 @@ func main() {
 
 		log.Printf("Auth successful: %s %s from %s", req.Method, req.URL.Path, req.RemoteAddr)
 
-		// Pass request to the reverse proxy
-		proxy.ServeHTTP(w, req)
+		// Process notification and determine if we should send to main
+		shouldSendToMain := handleNotification(req)
+
+		if shouldSendToMain {
+			// Pass request to the reverse proxy (sends to main)
+			proxy.ServeHTTP(w, req)
+		} else {
+			// Don't send to main, just return OK
+			log.Println("Skipping main destination (no send-to-main flag set)")
+			w.WriteHeader(http.StatusOK)
+		}
 	})
 
 	log.Println("Server listening on :8080")

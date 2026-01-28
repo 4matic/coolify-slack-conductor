@@ -130,6 +130,9 @@ following keys:
 
 - `name`: Must be all caps. Should be similar to your Slack channel's name.
 - `regex`: Any array of regular expressions
+- `send-to-main` (optional): Set to `true` if notifications matching this destination should also be sent to the main channel. Defaults to `false`.
+
+**Important:** By default, when a notification matches a destination, it is sent **only** to that destination (not to the main channel). If no destinations match, the notification goes to the main channel as a fallback.
 
 Here's an example:
 
@@ -139,6 +142,12 @@ Here's an example:
       - \*\*Project:\*\* gary@mfa\\n
       - \*\*Project:\*\* gary@g-verify\\n
       - \*\*Project:\*\* ian@bank-shields\\n
+
+  - name: COOLIFY_ALERTS
+    send-to-main: true  # Important alerts should also go to main channel
+    regex:
+      - '"Resource stopped"'
+      - '"Database backup failed"'
 ```
 
 This Destination is named `HCB_ENGR_NOTIFS`. The regex will match notifications for the
@@ -167,8 +176,11 @@ The environment variable **_MUST_** be added before merging your changes!
 
 ## Main channel
 
-The Conductor will always send all notification to the main channel. This is currently set
-as [`#coolify-notifs`](https://hackclub.slack.com/archives/C08AQL0DLF9) and is configured via the `WEBHOOK_MAIN_URL`.
+The Conductor sends notifications to the main channel in these cases:
+- When no destinations match the notification (fallback behavior)
+- When a matching destination has `send-to-main: true` set
+
+This is currently set as [`#coolify-notifs`](https://hackclub.slack.com/archives/C08AQL0DLF9) and is configured via the `WEBHOOK_MAIN_URL`.
 
 ## Deployment
 

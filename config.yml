@@ -5,9 +5,10 @@ destinations:
       - \*\*Project:\*\* ian@bank-shields\\n
   - name: HACKATHONS_DEV
     regex:
-      - \*\*Project:\*\* mha@hackathons\\n
+      - \*Project:\* mha@hackathons\\n
       - Database backup failed.*hackathons-postgres
   - name: COOLIFY_ALERTS # Important alerts about the server's well-being
+    send-to-main: true  # Important alerts should also go to main channel
     regex:
       - '"Resource stopped"' # When a resource unexpectedly stops
       - '"Database backup failed"'

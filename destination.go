@@ -9,16 +9,18 @@ import (
 )
 
 type ConfigItem struct {
-	Name  string
-	Regex []string
+	Name       string
+	Regex      []string
+	SendToMain bool `yaml:"send-to-main"`
 }
 type Config struct {
 	Destinations []ConfigItem
 }
 
 type Destination struct {
-	url    string
-	regexp []string
+	url        string
+	regexp     []string
+	sendToMain bool
 }
 
 func (dest Destination) Matches(body string) bool {
@@ -60,8 +62,9 @@ func loadDestinations() {
 	for _, item := range LoadedConfig.Destinations {
 		envVar := "WEBHOOK_" + item.Name + "_URL"
 		dest := Destination{
-			url:    os.Getenv(envVar),
-			regexp: item.Regex,
+			url:        os.Getenv(envVar),
+			regexp:     item.Regex,
+			sendToMain: item.SendToMain,
 		}
 		if dest.url == "" {
 			log.Fatalf("Missing %s environment variable", envVar)
