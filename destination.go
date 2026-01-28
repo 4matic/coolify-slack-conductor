@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"regexp"
+
+	"gopkg.in/yaml.v3"
 )
 
 type ConfigItem struct {
@@ -31,9 +31,7 @@ func (dest Destination) Matches(body string) bool {
 	return false
 }
 
-var MainDestination = Destination{
-	url: os.Getenv("WEBHOOK_MAIN_URL"),
-}
+var MainDestination Destination
 
 var LoadedConfig Config
 var LoadedDestinations []Destination
@@ -44,27 +42,36 @@ func loadDestinations() {
 		return
 	}
 
+	// Initialize MainDestination (after .env is loaded)
+	MainDestination = Destination{
+		url: os.Getenv("WEBHOOK_MAIN_URL"),
+	}
+	if MainDestination.url == "" {
+		log.Fatal("Missing WEBHOOK_MAIN_URL environment variable")
+	}
+
 	config, _ := os.ReadFile("config.yml")
 	err := yaml.Unmarshal(config, &LoadedConfig)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("loaded config:\n%v\n\n", LoadedConfig)
 
 	// Convert config into destinations
 	for _, item := range LoadedConfig.Destinations {
-		envVar := fmt.Sprintf("WEBHOOK_%s_URL", item.Name)
+		envVar := "WEBHOOK_" + item.Name + "_URL"
 		dest := Destination{
 			url:    os.Getenv(envVar),
 			regexp: item.Regex,
 		}
 		if dest.url == "" {
-			log.Fatal(fmt.Sprintf("Missing %s environment variable", envVar))
+			log.Fatalf("Missing %s environment variable", envVar)
 		}
 
 		LoadedDestinations = append(LoadedDestinations, dest)
+		log.Printf("Loaded destination: %s", item.Name)
 	}
 
+	log.Printf("Configuration complete: %d destinations loaded", len(LoadedDestinations))
 	ConfigIsLoaded = true
 }
 
